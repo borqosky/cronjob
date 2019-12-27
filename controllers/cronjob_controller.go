@@ -17,28 +17,55 @@ package controllers
 
 import (
 	"context"
+	"fmt"
+	"sort"
+	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/robfig/cron"
+	kbatch "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
+	apierrs "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	ref "k8s.io/client-go/tools/reference"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	batchv1 "cronjob/api/v1"
 )
 
+
+type realClock struct {}
+
+func (realClock) Now() time.Time { return time.Now() }
+
+// Clock clock knows how to get the current time.
+// It can be used to fake out timing for testing.
+type Clock interface {
+	Now() time.Time
+}
+
 // CronJobReconciler reconciles a CronJob object
 type CronJobReconciler struct {
 	client.Client
 	Log    logr.Logger
 	Scheme *runtime.Scheme
+	Clock
 }
+
+var (
+	scheduledTimeAnnotation  = "batch.tutorial.kubebuilder.io/scheduled-at"
+)
 
 // +kubebuilder:rbac:groups=batch.tutorial.kubebuilder.io,resources=cronjobs,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=batch.tutorial.kubebuilder.io,resources=cronjobs/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=batch,resources=jobs/status,verbs=get
 
 func (r *CronJobReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	_ = context.Background()
-	_ = r.Log.WithValues("cronjob", req.NamespacedName)
+	ctx := context.Background()
+	log := r.Log.WithValues("cronjob", req.NamespacedName)
 
 	// your logic here
 
