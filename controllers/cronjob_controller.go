@@ -32,7 +32,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	batchv1 "cronjob/api/v1"
+	batch "cronjob/api/v1"
 )
 
 
@@ -67,8 +67,13 @@ func (r *CronJobReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx := context.Background()
 	log := r.Log.WithValues("cronjob", req.NamespacedName)
 
-	// your logic here
-
+	var CronJob batch.CronJob
+	if err := r.Get(ctx, req.NamespacedName, &CronJob); err != nil {
+		log.Error(err, "Unable to fetch CronJob")
+		// we'll ignore not-found errors, since they can't be fixed by an immediate
+        // requeue (we'll need to wait for a new notification), and we can get them
+        // on deleted requests.
+	}
 	return ctrl.Result{}, nil
 }
 
