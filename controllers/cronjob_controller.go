@@ -72,13 +72,48 @@ func (r *CronJobReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		log.Error(err, "Unable to fetch CronJob")
 		// we'll ignore not-found errors, since they can't be fixed by an immediate
         // requeue (we'll need to wait for a new notification), and we can get them
-        // on deleted requests.
+		// on deleted requests.
+		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+
+	var childJobs kbatch.JobList
+	if err := r.List(ctx, &childJobs, client.InNamespace(req.Namespace), client.MatchingFields{"jobOwnerKey": req.Name}); err != nil {
+		log.Error(err, "unable to list child Jobs")
+		return ctrl.Result{}, err
+	}
+
+	// find the active list of jobs
+	var activeJobs []*kbatch.Job
+    var successfulJobs []*kbatch.Job
+	var failedJobs []*kbatch.Job
+	var mostRecentTime *time.Time // find the last run so we can update the status
+
+	isJobFinished := func (job *kbatch.Job) (bool, kbatch.JobConditionType) {
+		for _, c := range job.Status.Conditions {
+			if (c.Type == kbatch.JobComplete || c.Type == kbatch.JobFailed) && c.Status == corev1.ConditionTrue {
+				return true, c.Type
+			}
+		}
+		return false, ""
+	}
+
+	getScheduledTimeForJob := func (job *kbatch.Job) (*time.Time, error)  {
+		timeRaw := job.Annotations[scheduledTimeAnnotation]
+		if len(timeRaw) == 0 {
+			return nil, nil
+		}
+		timeParsed, err := time.Parse(time.RFC3339, timeRaw)
+		if err != nil {
+			return nil, err
+		}
+		return &timeParsed, nil
+	}
+
 	return ctrl.Result{}, nil
 }
 
 func (r *CronJobReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&batchv1.CronJob{}).
+		For(&batch.CronJob{}).
 		Complete(r)
 }
