@@ -109,6 +109,53 @@ func (r *CronJobReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return &timeParsed, nil
 	}
 
+	for _, job := range childJobs.Items {
+		_, finishedType := isJobFinished(&job)
+		switch finishedType {
+		case "": // ongoing
+			activeJobs = append(activeJobs, &job)
+		case kbatch.JobFailed:
+			failedJobs = append(failedJobs, &job)
+		case kbatch.JobComplete:
+			successfulJobs = append(successfulJobs, &job)
+		}
+
+		// We'll store the launch time in an annotation, so we'll reconstitute that from
+		// the active jobs themselves.
+		scheduledTimeForJob, err := getScheduledTimeForJob(&job)
+		if err != nil {
+			log.Error(err, "unable to parse schedule time for child job", "job", &job)
+			continue
+		}
+		if scheduledTimeForJob != nil {
+			if mostRecentTime == nil {
+				mostRecentTime = scheduledTimeForJob
+			} else if mostRecentTime.Before(*scheduledTimeForJob) {
+				mostRecentTime = scheduledTimeForJob
+			}
+		}
+	}
+	if mostRecentTime != nil {
+		CronJob.Status.LastScheduleTime = &metav1.Time{Time: *mostRecentTime}
+	} else {
+		CronJob.Status.LastScheduleTime = nil
+	}
+	CronJob.Status.Active = nil
+	for _, activeJob := range activeJobs {
+		jobRef, err := ref.GetReference(r.Scheme, activeJob)
+		if err != nil {
+			log.Error(err, "unable to make reference to active job", "job", activeJob)
+			continue
+		}
+		CronJob.Status.Active = append(CronJob.Status.Active, *jobRef)
+		log.V(1).Info("job count", "active jobs", len(activeJobs), "successful jobs", len(successfulJobs), "failed jobs", len(failedJobs))
+
+	}
+
+	if err := r.Status().Update(ctx, &CronJob); err != nil {
+		log.Error(err, "unable to update CronJob status")
+		return ctrl.Result{}, err
+	}
 	return ctrl.Result{}, nil
 }
 
