@@ -140,6 +140,7 @@ func (r *CronJobReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	} else {
 		cronJob.Status.LastScheduleTime = nil
 	}
+
 	cronJob.Status.Active = nil
 	for _, activeJob := range activeJobs {
 		jobRef, err := ref.GetReference(r.Scheme, activeJob)
@@ -177,7 +178,6 @@ func (r *CronJobReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			}
 		}
 	}
-
     if cronJob.Spec.SuccessfulJobsHistoryLimit != nil {
         sort.Slice(successfulJobs, func(i, j int) bool {
             if successfulJobs[i].Status.StartTime == nil {
@@ -196,12 +196,13 @@ func (r *CronJobReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
             }
         }
 	}
+
 	if cronJob.Spec.Suspend != nil && *cronJob.Spec.Suspend {
 		log.V(1).Info("cronjob suspended, skipping")
 		return ctrl.Result{}, nil
 	}
 
-	getNextSchedule := func (cronJob * batch.CronJob, now time.Time) (lastMissed time.Time, next time.Time, err error) {
+	getNextSchedule := func (cronJob *batch.CronJob, now time.Time) (lastMissed time.Time, next time.Time, err error) {
 		sched, err := cron.ParseStandard(cronJob.Spec.Schedule)
 		if err != nil {
 			return time.Time{}, time.Time{}, fmt.Errorf("Unparseable schedule %q: %v", cronJob.Spec.Schedule, err)
