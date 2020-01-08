@@ -17,13 +17,13 @@ package v1
 
 import (
 	"github.com/robfig/cron"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	validationutils "k8s.io/apimachinery/pkg/util/validation"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	validationutils "k8s.io/apimachinery/pkg/util/validation"
 
 	"k8s.io/apimachinery/pkg/util/validation/field"
 )
@@ -55,10 +55,10 @@ func (r *CronJob) Default() {
 		r.Spec.SuccessfulJobsHistoryLimit = new(int32)
 		*r.Spec.SuccessfulJobsHistoryLimit = 3
 	}
-    if r.Spec.FailedJobsHistoryLimit == nil {
-        r.Spec.FailedJobsHistoryLimit = new(int32)
-        *r.Spec.FailedJobsHistoryLimit = 1
-    }
+	if r.Spec.FailedJobsHistoryLimit == nil {
+		r.Spec.FailedJobsHistoryLimit = new(int32)
+		*r.Spec.FailedJobsHistoryLimit = 1
+	}
 }
 
 // TODO(user): change verbs to "verbs=create;update;delete" if you want to enable deletion validation.
@@ -103,30 +103,30 @@ func (r *CronJob) validateCronJob() error {
 }
 
 func (r *CronJob) validateCronJobSpec() *field.Error {
-    // The field helpers from the kubernetes API machinery help us return nicely
+	// The field helpers from the kubernetes API machinery help us return nicely
 	// structured validation errors.
 	return validateScheduleFormat(
 		r.Spec.Schedule,
-		field.NewPath("spec").Child("schedule"))	
+		field.NewPath("spec").Child("schedule"))
 }
 
 func (r *CronJob) validateCronJobName() *field.Error {
-    if len(r.ObjectMeta.Name) > validationutils.DNS1035LabelMaxLength - 11 {
-        // The job name length is 63 character like all Kubernetes objects
-        // (which must fit in a DNS subdomain). The cronjob controller appends
-        // a 11-character suffix to the cronjob (`-$TIMESTAMP`) when creating
-        // a job. The job name length limit is 63 characters. Therefore cronjob
-        // names must have length <= 63-11=52. If we don't validate this here,
-        // then job creation will fail later.
-        return field.Invalid(field.NewPath("metadata").Child("name"), r.Name, "must be no more than 52 characters")
+	if len(r.ObjectMeta.Name) > validationutils.DNS1035LabelMaxLength-11 {
+		// The job name length is 63 character like all Kubernetes objects
+		// (which must fit in a DNS subdomain). The cronjob controller appends
+		// a 11-character suffix to the cronjob (`-$TIMESTAMP`) when creating
+		// a job. The job name length limit is 63 characters. Therefore cronjob
+		// names must have length <= 63-11=52. If we don't validate this here,
+		// then job creation will fail later.
+		return field.Invalid(field.NewPath("metadata").Child("name"), r.Name, "must be no more than 52 characters")
 	}
 
-    return nil
+	return nil
 }
 
 func validateScheduleFormat(schedule string, fldPath *field.Path) *field.Error {
-    if _, err := cron.ParseStandard(schedule); err != nil {
-        return field.Invalid(fldPath, schedule, err.Error())
-    }
-    return nil
+	if _, err := cron.ParseStandard(schedule); err != nil {
+		return field.Invalid(fldPath, schedule, err.Error())
+	}
+	return nil
 }
